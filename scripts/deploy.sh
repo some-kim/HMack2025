@@ -7,7 +7,7 @@ echo "🏥 CareFlow Infrastructure Deployment"
 echo "===================================="
 
 # Navigate to infrastructure directory
-cd infrastructure
+cd ../infrastructure
 
 # Build TypeScript
 echo "🔨 Building TypeScript..."

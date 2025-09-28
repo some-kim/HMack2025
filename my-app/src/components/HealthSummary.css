@@ -1,0 +1,46 @@
+.health-summary-content {
+  padding: 25px;
+}
+
+.summary-item {
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.summary-item:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.summary-label {
+  font-weight: 600;
+  color: #333;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.summary-value {
+  color: #666;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.empty-value {
+  color: #bbb;
+  font-style: italic;
+}
+
+.medications-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.medications-list li {
+  padding: 2px 0;
+  font-size: 0.9rem;
+}
