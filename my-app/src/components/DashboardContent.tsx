@@ -5,6 +5,7 @@ import AppointmentCard from './AppointmentCard';
 import MessageThread from './MessageThread';
 import HealthSummary from './HealthSummary';
 import QuickActions from './QuickActions';
+import Chat from './chat';
 import './DashboardContent.css';
 
 interface DashboardContentProps {
@@ -141,6 +142,15 @@ const DashboardContent: React.FC<DashboardContentProps> = ({ patientProfile }) =
 
       <div className="dashboard-grid">
         <div className="main-column">
+          <section className="dashboard-section">
+            <div className="section-header">
+              <h2>Chat with AI Assistant</h2>
+            </div>
+            <div className="chat-container">
+              <Chat />
+            </div>
+          </section>
+
           <section className="dashboard-section">
             <div className="section-header">
               <h2>Upcoming Appointments</h2>

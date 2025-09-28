@@ -11,17 +11,28 @@ from typing import Optional, Dict, Any, List
 import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import jose
+from jose import jwt as jose_jwt
 from botocore.exceptions import ClientError
 from werkzeug.exceptions import BadRequest
+from dotenv import load_dotenv
 
-# Add the backend directory to the Python path to import agentmail_tool
+# Load environment variables from .env file
+load_dotenv()
+
+# Configure logging first
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Add the backend directory to the Python path to import agentmail_tool and dynamodb_utils
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'backend'))
 try:
     from agentmail_tool import create_inbox
+    from dynamodb_utils import get_db_client, PatientRecord
 except ImportError as e:
-    logging.warning(f"Could not import agentmail_tool: {e}")
+    logging.warning(f"Could not import backend tools: {e}")
     create_inbox = None
+    get_db_client = None
+    PatientRecord = None
 
 
 # Initialize Flask app
@@ -43,19 +54,30 @@ ALGORITHMS = ['RS256']
 AWS_REGION = os.getenv('AWS_DEFAULT_REGION', 'us-east-2')
 
 # DynamoDB Table Names
-PATIENTS_TABLE = os.getenv('PATIENTS_TABLE_NAME', 'careconnector-patients')
+CARECONNECTOR_TABLE = os.getenv('PATIENTS_TABLE_NAME', 'careconnector-main')
 
 # AgentMail Configuration
 AGENTMAIL_API_KEY = os.getenv('AGENTMAIL_API_KEY')
 AGENTMAIL_BASE_URL = os.getenv('AGENTMAIL_BASE_URL', 'https://api.agentmail.com')
 
-# Initialize DynamoDB
+# Initialize DynamoDB with our sophisticated utilities
 try:
+    if get_db_client and PatientRecord:
+        db_client = get_db_client(table_name=CARECONNECTOR_TABLE, region_name=AWS_REGION)
+        patient_ops = PatientRecord(db_client)
+        logger.info(f"Initialized DynamoDB utilities for table: {CARECONNECTOR_TABLE}")
+    else:
+        db_client = None
+        patient_ops = None
+        logger.warning("DynamoDB utilities not available - using fallback mode")
+
+    # Fallback for legacy code compatibility
     dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
-    patients_table = dynamodb.Table(PATIENTS_TABLE)
+    patients_table = dynamodb.Table(CARECONNECTOR_TABLE)
 except Exception as e:
-    app.logger.error(f"Failed to initialize DynamoDB: {e}")
-    # For local development, you might want to use mock tables
+    logger.error(f"Failed to initialize DynamoDB: {e}")
+    db_client = None
+    patient_ops = None
     patients_table = None
 
 # In-memory storage for development when DynamoDB is not available
@@ -67,6 +89,15 @@ dev_messages = {}
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Log configuration on startup
+logger.info(f"[Startup] Auth0 Domain: {AUTH0_DOMAIN}")
+logger.info(f"[Startup] Auth0 Audience: {AUTH0_AUDIENCE}")
+logger.info(f"[Startup] AWS Region: {AWS_REGION}")
+logger.info(f"[Startup] DynamoDB Table: {CARECONNECTOR_TABLE}")
+logger.info(f"[Startup] AgentMail API Key configured: {bool(AGENTMAIL_API_KEY)}")
+logger.info(f"[Startup] DynamoDB utilities available: {bool(db_client and patient_ops)}")
+logger.info(f"[Startup] Legacy table available: {bool(patients_table)}")
+
 # Auth0 JWT Token Validation
 class AuthError(Exception):
     """Custom Auth Error Exception"""
@@ -76,9 +107,12 @@ class AuthError(Exception):
 
 def get_token_auth_header() -> str:
     """Obtains the Access Token from the Authorization Header"""
+    logger.info(f"[Auth] All request headers: {dict(request.headers)}")
     auth_header = request.headers.get('Authorization', None)
-    
+    logger.info(f"[Auth] Authorization header: {auth_header}")
+
     if not auth_header:
+        logger.error("[Auth] Authorization header missing!")
         raise AuthError({
             'code': 'authorization_header_missing',
             'description': 'Authorization header is expected.'
@@ -113,7 +147,7 @@ def verify_decode_jwt(token: str) -> Dict[str, Any]:
         jsonurl = requests.get(f'https://{AUTH0_DOMAIN}/.well-known/jwks.json')
         jwks = jsonurl.json()
         
-        unverified_header = jose.jwt.get_unverified_header(token)
+        unverified_header = jose_jwt.get_unverified_header(token)
         rsa_key = {}
         
         if 'kid' not in unverified_header:
@@ -139,7 +173,7 @@ def verify_decode_jwt(token: str) -> Dict[str, Any]:
                 'description': 'Unable to find appropriate key.'
             }, 401)
 
-        payload = jose.jwt.decode(
+        payload = jose_jwt.decode(
             token,
             rsa_key,
             algorithms=ALGORITHMS,
@@ -149,13 +183,13 @@ def verify_decode_jwt(token: str) -> Dict[str, Any]:
 
         return payload
 
-    except jose.jwt.ExpiredSignatureError:
+    except jose_jwt.ExpiredSignatureError:
         raise AuthError({
             'code': 'token_expired',
             'description': 'Token expired.'
         }, 401)
 
-    except jose.jwt.JWTClaimsError:
+    except jose_jwt.JWTClaimsError:
         raise AuthError({
             'code': 'invalid_claims',
             'description': 'Incorrect claims. Please, check the audience and issuer.'
@@ -172,20 +206,25 @@ def requires_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         try:
+            logger.info(f"[Auth] Processing authentication for {request.endpoint}")
             token = get_token_auth_header()
+            logger.info(f"[Auth] Token extracted, length: {len(token) if token else 0}")
+
             payload = verify_decode_jwt(token)
+            logger.info(f"[Auth] Token decoded successfully, user: {payload.get('sub', 'unknown')}")
             request.current_user = payload
         except AuthError as auth_error:
+            logger.error(f"[Auth] Auth error: {auth_error.error}")
             return jsonify(auth_error.error), auth_error.status_code
         except Exception as e:
-            logger.error(f"Authentication error: {e}")
+            logger.error(f"[Auth] Authentication error: {e}")
             return jsonify({
                 'code': 'invalid_token',
                 'description': 'Unable to validate token.'
             }), 401
-        
+
         return f(*args, **kwargs)
-    
+
     return decorated
 
 # Error Handlers
@@ -285,89 +324,296 @@ def health_check():
         'version': '1.0.0'
     })
 
+# User Initialization Route
+@app.route('/api/patient/initialize', methods=['POST'])
+@requires_auth
+def initialize_patient():
+    """Initialize a basic patient record for a new user"""
+    user_id = get_current_user_id()
+    user_email = request.current_user.get('email', '')
+    user_name = request.current_user.get('name', 'User')
+
+    logger.info(f"[Initialize] Creating initial record for user: {user_id}")
+
+    try:
+        # Check if user already exists
+        if patient_ops:
+            existing = patient_ops.get_patient(user_id)
+            if existing:
+                logger.info(f"[Initialize] User {user_id} already exists")
+                return jsonify({'message': 'User already initialized', 'profile': serialize_dynamodb_item(existing)})
+        elif patients_table:
+            response = patients_table.get_item(Key={'user_id': user_id})
+            if 'Item' in response:
+                logger.info(f"[Initialize] User {user_id} already exists (legacy)")
+                return jsonify({'message': 'User already initialized', 'profile': serialize_dynamodb_item(response['Item'])})
+        else:
+            if user_id in dev_patient_profiles:
+                logger.info(f"[Initialize] User {user_id} already exists (dev)")
+                return jsonify({'message': 'User already initialized', 'profile': dev_patient_profiles[user_id]})
+
+        # Create minimal initial profile
+        initial_data = {
+            'user_id': user_id,
+            'email': user_email,
+            'name': user_name,
+            'initialization_complete': True,
+            'profile_complete': False,
+            'personal_info': {},
+            'medical_info': {
+                'allergies': [],
+                'medications': [],
+                'conditions': [],
+                'insurance': {'provider': '', 'policy_number': ''}
+            },
+            'preferences': {
+                'communication_method': 'email',
+                'appointment_reminders': True,
+                'health_tips': False
+            },
+            'agent_email': ''
+        }
+
+        if patient_ops:
+            # Use sophisticated patient operations
+            result = patient_ops.create_patient(user_id, initial_data)
+            created_profile = result['item']
+        elif patients_table:
+            # Fallback to legacy table access
+            initial_data.update({
+                'created_at': datetime.utcnow().isoformat(),
+                'updated_at': datetime.utcnow().isoformat()
+            })
+            patients_table.put_item(Item=initial_data)
+            created_profile = initial_data
+        else:
+            # Development mode
+            initial_data.update({
+                'created_at': datetime.utcnow().isoformat(),
+                'updated_at': datetime.utcnow().isoformat()
+            })
+            dev_patient_profiles[user_id] = initial_data
+            created_profile = initial_data
+
+        logger.info(f"[Initialize] Successfully created initial record for {user_id}")
+        return jsonify({
+            'message': 'User initialized successfully',
+            'profile': serialize_dynamodb_item(created_profile)
+        }), 201
+
+    except Exception as e:
+        logger.error(f"[Initialize] Error initializing user {user_id}: {e}")
+        return jsonify({'error': 'Failed to initialize user'}), 500
+
 # Patient Profile Routes
 @app.route('/api/patient/profile', methods=['GET'])
 @requires_auth
 def get_patient_profile():
-    """Get patient profile from DynamoDB"""
+    """Get patient profile using sophisticated DynamoDB utilities"""
     user_id = get_current_user_id()
-    
+    logger.info(f"[Profile GET] Request for user_id: {user_id}")
+    logger.info(f"[Profile GET] patient_ops available: {patient_ops is not None}")
+    logger.info(f"[Profile GET] patients_table available: {patients_table is not None}")
+
     try:
-        if not patients_table:
-            # In development mode, check in-memory storage
+        if patient_ops:
+            # Use our sophisticated patient operations
+            logger.info(f"[Profile GET] Using patient_ops to get profile for {user_id}")
+            profile = patient_ops.get_patient(user_id)
+            if profile:
+                logger.info(f"[Profile GET] Profile found for {user_id}")
+                return jsonify(serialize_dynamodb_item(profile))
+            else:
+                logger.info(f"[Profile GET] No profile found for {user_id} - returning 404")
+                return jsonify({'message': 'Patient profile not found'}), 404
+
+        elif patients_table:
+            # Fallback to legacy table access
+            logger.info(f"[Profile GET] Using legacy table access for {user_id}")
+            response = patients_table.get_item(Key={'user_id': user_id})
+            if 'Item' not in response:
+                logger.info(f"[Profile GET] No legacy profile found for {user_id} - returning 404")
+                return jsonify({'message': 'Patient profile not found'}), 404
+            return jsonify(serialize_dynamodb_item(response['Item']))
+
+        else:
+            # Development mode with in-memory storage
+            logger.info(f"[Profile GET] Using dev storage for {user_id}")
+            logger.info(f"[Profile GET] Dev profiles available: {list(dev_patient_profiles.keys())}")
             if user_id in dev_patient_profiles:
+                logger.info(f"[Profile GET] Dev profile found for {user_id}")
                 return jsonify(dev_patient_profiles[user_id])
             else:
+                logger.info(f"[Profile GET] No dev profile found for {user_id} - returning 404")
                 return jsonify({'message': 'Patient profile not found'}), 404
-        
-        response = patients_table.get_item(Key={'user_id': user_id})
-        
-        if 'Item' not in response:
-            return jsonify({'message': 'Patient profile not found'}), 404
-        
-        return jsonify(serialize_dynamodb_item(response['Item']))
-    
-    except ClientError as e:
-        logger.error(f"DynamoDB error: {e}")
-        return jsonify({'error': 'Database error'}), 500
+
     except Exception as e:
-        logger.error(f"Error retrieving patient profile: {e}")
+        logger.error(f"[Profile GET] Error retrieving patient profile for {user_id}: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/api/patient/profile', methods=['POST'])
 @requires_auth
 def create_patient_profile():
-    """Create new patient profile in DynamoDB"""
+    """Create new patient profile using sophisticated DynamoDB utilities"""
     user_id = get_current_user_id()
-    
+
     try:
         data = request.get_json()
         if not data:
             raise BadRequest("No data provided")
-        
-        # Validate required fields
-        required_fields = ['personal_info', 'medical_info', 'preferences']
-        for field in required_fields:
-            if field not in data:
-                return jsonify({'error': f'Missing required field: {field}'}), 400
-        
-        # Create patient profile with agent_email support
-        profile_data = {
-            'user_id': user_id,
-            'personal_info': data['personal_info'],
-            'medical_info': data['medical_info'],
-            'preferences': data['preferences'],
-            'agent_email': data.get('agent_email', ''),  # Support for agent email as GSI
-            'created_at': datetime.utcnow().isoformat(),
-            'updated_at': datetime.utcnow().isoformat()
+
+        # Validate required personal info fields
+        if 'personal_info' not in data:
+            return jsonify({'error': 'Personal information is required'}), 400
+
+        personal_info = data['personal_info']
+        required_personal_fields = ['date_of_birth', 'gender', 'phone', 'address']
+        missing_fields = []
+
+        for field in required_personal_fields:
+            if field not in personal_info or not personal_info[field]:
+                missing_fields.append(field)
+
+        if missing_fields:
+            return jsonify({'error': f'Missing required personal information: {", ".join(missing_fields)}'}), 400
+
+        # Validate emergency contact if provided
+        if 'emergency_contact' in personal_info:
+            emergency_contact = personal_info['emergency_contact']
+            required_emergency_fields = ['name', 'phone', 'relationship']
+            missing_emergency_fields = []
+
+            for field in required_emergency_fields:
+                if field not in emergency_contact or not emergency_contact[field]:
+                    missing_emergency_fields.append(field)
+
+            if missing_emergency_fields:
+                return jsonify({'error': f'Missing required emergency contact information: {", ".join(missing_emergency_fields)}'}), 400
+
+        # Default structures for optional sections
+        default_medical_info = {
+            'allergies': [],
+            'medications': [],
+            'conditions': [],
+            'insurance': {
+                'provider': '',
+                'policy_number': ''
+            }
         }
-        
-        if patients_table:
+
+        default_preferences = {
+            'communication_method': 'email',
+            'appointment_reminders': True,
+            'health_tips': False
+        }
+
+        # Use provided personal info as-is (already validated)
+        # Merge optional sections with defaults
+        medical_info = {**default_medical_info, **data.get('medical_info', {})}
+        if 'insurance' in data.get('medical_info', {}):
+            medical_info['insurance'] = {
+                **default_medical_info['insurance'],
+                **data['medical_info']['insurance']
+            }
+
+        preferences = {**default_preferences, **data.get('preferences', {})}
+
+        # Prepare patient data with proper structure for our utilities
+        patient_data = {
+            'user_id': user_id,
+            'personal_info': personal_info,
+            'medical_info': medical_info,
+            'preferences': preferences,
+            'agent_email': data.get('agent_email', ''),  # For GSI querying
+        }
+
+        logger.info(f"[Profile POST] Prepared patient data for {user_id}: {list(patient_data.keys())}")
+
+        if patient_ops:
+            # Use our sophisticated patient operations
+            result = patient_ops.create_patient(user_id, patient_data)
+            created_profile = result['item']
+
+            # Set up GSI fields for agent-based queries if agent_email is provided
+            if data.get('agent_email'):
+                # Update with GSI fields for agent queries
+                db_client.update_item(
+                    pk=f'PATIENT#{user_id}',
+                    sk='PROFILE',
+                    updates={
+                        'GSI1PK': f'AGENT#{data["agent_email"]}',
+                        'GSI1SK': f'PATIENT#{user_id}'
+                    }
+                )
+
+        elif patients_table:
+            # Fallback to legacy table access
+            profile_data = {
+                'user_id': user_id,
+                'personal_info': data['personal_info'],
+                'medical_info': data['medical_info'],
+                'preferences': data['preferences'],
+                'agent_email': data.get('agent_email', ''),
+                'created_at': datetime.utcnow().isoformat(),
+                'updated_at': datetime.utcnow().isoformat()
+            }
             patients_table.put_item(Item=profile_data)
+            created_profile = profile_data
+
         else:
-            # Store in development memory for testing
+            # Development mode with in-memory storage
+            profile_data = {
+                'user_id': user_id,
+                'personal_info': data['personal_info'],
+                'medical_info': data['medical_info'],
+                'preferences': data['preferences'],
+                'agent_email': data.get('agent_email', ''),
+                'created_at': datetime.utcnow().isoformat(),
+                'updated_at': datetime.utcnow().isoformat()
+            }
             dev_patient_profiles[user_id] = profile_data
-        
+            created_profile = profile_data
+
+        # Create AgentMail inbox for the patient if create_inbox is available
+        if create_inbox:
+            try:
+                user_email = request.current_user.get('email', '')
+                user_name = request.current_user.get('name', 'Patient')
+                first_name = user_name.split(' ')[0] if user_name else 'Patient'
+                last_name = user_name.split(' ')[-1] if ' ' in user_name else 'User'
+
+                inbox_result = create_inbox(first_name, last_name, user_id)
+                logger.info(f"Created AgentMail inbox for user {user_id}: {inbox_result}")
+
+                # Update patient profile with inbox information
+                if patient_ops:
+                    patient_ops.update_patient(user_id, {
+                        'agentmail_inbox': inbox_result
+                    })
+
+            except Exception as e:
+                logger.error(f"Failed to create AgentMail inbox: {e}")
+                # Don't fail the profile creation if inbox creation fails
+
         # Send welcome email via AgentMail
         user_email = request.current_user.get('email')
         if user_email:
             send_agentmail_message(
                 to_email=user_email,
-                subject='Welcome to CareFlow!',
-                content=f'Welcome to CareFlow! Your health profile has been successfully created. You can now schedule appointments, communicate with providers, and manage your healthcare all in one place.',
+                subject='Welcome to CareConnector!',
+                content=f'Welcome to CareConnector! Your health profile has been successfully created. You can now schedule appointments, communicate with providers, and manage your healthcare all in one place.',
                 template_id='welcome_template'
             )
-        
+
         return jsonify({
             'message': 'Profile created successfully',
-            'profile': serialize_dynamodb_item(profile_data)
+            'profile': serialize_dynamodb_item(created_profile)
         }), 201
-    
+
     except BadRequest as e:
         return jsonify({'error': str(e)}), 400
-    except ClientError as e:
-        logger.error(f"DynamoDB error: {e}")
-        return jsonify({'error': 'Database error'}), 500
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     except Exception as e:
         logger.error(f"Error creating patient profile: {e}")
         return jsonify({'error': 'Internal server error'}), 500
@@ -375,44 +621,72 @@ def create_patient_profile():
 @app.route('/api/patient/profile', methods=['PUT'])
 @requires_auth
 def update_patient_profile():
-    """Update patient profile in DynamoDB"""
+    """Update patient profile using sophisticated DynamoDB utilities"""
     user_id = get_current_user_id()
-    
+
     try:
         updates = request.get_json()
         if not updates:
             raise BadRequest("No update data provided")
-        
+
         # Remove user_id from updates if present
         updates.pop('user_id', None)
-        updates['updated_at'] = datetime.utcnow().isoformat()
-        
-        if patients_table:
+
+        if patient_ops:
+            # Use our sophisticated patient operations
+            updated_profile = patient_ops.update_patient(user_id, updates)
+
+            # Handle agent_email GSI updates
+            if 'agent_email' in updates:
+                db_client.update_item(
+                    pk=f'PATIENT#{user_id}',
+                    sk='PROFILE',
+                    updates={
+                        'GSI1PK': f'AGENT#{updates["agent_email"]}' if updates["agent_email"] else '',
+                        'GSI1SK': f'PATIENT#{user_id}' if updates["agent_email"] else ''
+                    }
+                )
+
+            return jsonify({
+                'message': 'Profile updated successfully',
+                'profile': serialize_dynamodb_item(updated_profile)
+            })
+
+        elif patients_table:
+            # Fallback to legacy table access
+            updates['updated_at'] = datetime.utcnow().isoformat()
+
             # Build update expression
             update_expression = "SET "
             expression_values = {}
-            
+
             for key, value in updates.items():
                 update_expression += f"#{key} = :{key}, "
                 expression_values[f":{key}"] = value
-            
+
             update_expression = update_expression.rstrip(', ')
             expression_names = {f"#{key}": key for key in updates.keys()}
-            
+
             patients_table.update_item(
                 Key={'user_id': user_id},
                 UpdateExpression=update_expression,
                 ExpressionAttributeValues=expression_values,
                 ExpressionAttributeNames=expression_names
             )
-        
-        return jsonify({'message': 'Profile updated successfully'})
-    
+
+            return jsonify({'message': 'Profile updated successfully'})
+
+        else:
+            # Development mode with in-memory storage
+            if user_id in dev_patient_profiles:
+                dev_patient_profiles[user_id].update(updates)
+                dev_patient_profiles[user_id]['updated_at'] = datetime.utcnow().isoformat()
+                return jsonify({'message': 'Profile updated successfully'})
+            else:
+                return jsonify({'error': 'Profile not found'}), 404
+
     except BadRequest as e:
         return jsonify({'error': str(e)}), 400
-    except ClientError as e:
-        logger.error(f"DynamoDB error: {e}")
-        return jsonify({'error': 'Database error'}), 500
     except Exception as e:
         logger.error(f"Error updating patient profile: {e}")
         return jsonify({'error': 'Internal server error'}), 500
@@ -421,24 +695,47 @@ def update_patient_profile():
 @app.route('/api/patients/by-agent/<agent_email>', methods=['GET'])
 @requires_auth
 def get_patients_by_agent(agent_email):
-    """Get patients assigned to a specific agent using the GSI"""
+    """Get patients assigned to a specific agent using sophisticated DynamoDB utilities with GSI"""
     try:
-        if not patients_table:
-            # Return mock data for development
-            return jsonify([])
+        if db_client:
+            # Use our sophisticated DynamoDB utilities with GSI1
+            patients = db_client.query_items(
+                pk=f'AGENT#{agent_email}',
+                index_name='GSI1'
+            )
 
-        response = patients_table.query(
-            IndexName='agent-email-index',
-            KeyConditionExpression='agent_email = :agent_email',
-            ExpressionAttributeValues={':agent_email': agent_email}
-        )
+            # Transform the results to match expected frontend format
+            patient_profiles = []
+            for patient_item in patients:
+                if patient_item.get('EntityType') == 'Patient':
+                    patient_profiles.append(serialize_dynamodb_item(patient_item))
 
-        patients = [serialize_dynamodb_item(item) for item in response.get('Items', [])]
-        return jsonify(patients)
+            return jsonify(patient_profiles)
 
-    except ClientError as e:
-        logger.error(f"DynamoDB error: {e}")
-        return jsonify({'error': 'Database error'}), 500
+        elif patients_table:
+            # Fallback to legacy table access with GSI
+            try:
+                response = patients_table.query(
+                    IndexName='agent-email-index',
+                    KeyConditionExpression='agent_email = :agent_email',
+                    ExpressionAttributeValues={':agent_email': agent_email}
+                )
+                patients = [serialize_dynamodb_item(item) for item in response.get('Items', [])]
+                return jsonify(patients)
+            except ClientError as e:
+                if 'ResourceNotFoundException' in str(e):
+                    logger.warning(f"GSI 'agent-email-index' not found, returning empty list")
+                    return jsonify([])
+                raise
+
+        else:
+            # Development mode with in-memory storage
+            agent_patients = []
+            for user_id, profile in dev_patient_profiles.items():
+                if profile.get('agent_email') == agent_email:
+                    agent_patients.append(profile)
+            return jsonify(agent_patients)
+
     except Exception as e:
         logger.error(f"Error retrieving patients by agent: {e}")
         return jsonify({'error': 'Internal server error'}), 500

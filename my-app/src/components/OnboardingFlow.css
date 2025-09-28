@@ -1,10 +1,31 @@
 .onboarding-container {
-  max-width: 600px;
+  max-width: 800px;
   margin: 40px auto;
   background: white;
   border-radius: 20px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
   overflow: hidden;
+  width: calc(100% - 40px);
+}
+
+@media (min-width: 768px) {
+  .onboarding-container {
+    margin: 60px auto;
+    width: calc(100% - 80px);
+  }
+}
+
+@media (min-width: 1024px) {
+  .onboarding-container {
+    max-width: 900px;
+    margin: 80px auto;
+  }
+}
+
+@media (min-width: 1440px) {
+  .onboarding-container {
+    max-width: 1000px;
+  }
 }
 
 .onboarding-progress {
@@ -36,6 +57,18 @@
 
 .onboarding-content {
   padding: 40px 30px;
+}
+
+@media (min-width: 768px) {
+  .onboarding-content {
+    padding: 50px 50px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .onboarding-content {
+    padding: 60px 60px;
+  }
 }
 
 .onboarding-step h2 {
@@ -163,6 +196,19 @@
   display: flex;
   justify-content: space-between;
   gap: 15px;
+}
+
+@media (min-width: 768px) {
+  .onboarding-actions {
+    padding: 0 50px 40px;
+    gap: 20px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .onboarding-actions {
+    padding: 0 60px 50px;
+  }
 }
 
 .btn-primary,

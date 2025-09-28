@@ -27,7 +27,9 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onComplete }) => {
       policyNumber: ''
     },
     allergies: [] as string[],
+    allergiesText: '', // Add text input state
     medications: [] as string[],
+    medicationsText: '', // Add text input state
     medicalConditions: [] as string[],
     communicationPreferences: {
       method: 'email' as 'email' | 'sms' | 'both',
@@ -49,43 +51,81 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onComplete }) => {
 
   const handleSubmit = async () => {
     try {
-      const token = await getAccessTokenSilently();
+      console.log('[OnboardingFlow] Starting profile submission');
+      console.log('[OnboardingFlow] Form data:', formData);
 
-      // Map frontend form data to backend expected structure
+      // Validate required personal information
+      const requiredFields = {
+        'Date of Birth': formData.dateOfBirth,
+        'Gender': formData.gender,
+        'Phone Number': formData.phone,
+        'Address': formData.address,
+        'Emergency Contact Name': formData.emergencyContact.name,
+        'Emergency Contact Phone': formData.emergencyContact.phone,
+        'Emergency Contact Relationship': formData.emergencyContact.relationship,
+      };
+
+      const missingFields = Object.entries(requiredFields)
+        .filter(([_, value]) => !value || value.trim() === '')
+        .map(([field, _]) => field);
+
+      if (missingFields.length > 0) {
+        alert(`Please fill out the following required fields:\n• ${missingFields.join('\n• ')}`);
+        return;
+      }
+
+      const tokenResponse = await getAccessTokenSilently();
+      console.log('[OnboardingFlow] Token response:', tokenResponse);
+
+      // Extract the actual token string from the response
+      const token = typeof tokenResponse === 'string' ? tokenResponse : tokenResponse.access_token;
+      console.log('[OnboardingFlow] Token extracted:', token ? 'Success' : 'Failed');
+      console.log('[OnboardingFlow] Token length:', token?.length || 0);
+      console.log('[OnboardingFlow] Token preview:', token?.substring(0, 50) + '...');
+
+      // Map frontend form data to backend expected structure with safe defaults
       const profileData = {
         agent_email: formData.agentEmail || '',
         personal_info: {
-          date_of_birth: formData.dateOfBirth,
-          gender: formData.gender,
-          phone: formData.phone,
-          address: formData.address,
+          date_of_birth: formData.dateOfBirth || '',
+          gender: formData.gender || '',
+          phone: formData.phone || '',
+          address: formData.address || '',
           emergency_contact: {
-            name: formData.emergencyContact.name,
-            phone: formData.emergencyContact.phone,
-            relationship: formData.emergencyContact.relationship
+            name: formData.emergencyContact.name || '',
+            phone: formData.emergencyContact.phone || '',
+            relationship: formData.emergencyContact.relationship || ''
           }
         },
         medical_info: {
-          allergies: formData.allergies,
-          medications: formData.medications,
-          conditions: formData.medicalConditions,
+          allergies: Array.isArray(formData.allergies) ? formData.allergies : [],
+          medications: Array.isArray(formData.medications) ? formData.medications : [],
+          conditions: Array.isArray(formData.medicalConditions) ? formData.medicalConditions : [],
           insurance: {
-            provider: formData.insurance.provider,
-            policy_number: formData.insurance.policyNumber
+            provider: formData.insurance.provider || '',
+            policy_number: formData.insurance.policyNumber || ''
           }
         },
         preferences: {
-          communication_method: formData.communicationPreferences.method,
-          appointment_reminders: formData.communicationPreferences.appointmentReminders,
-          health_tips: formData.communicationPreferences.healthTips
+          communication_method: formData.communicationPreferences.method || 'email',
+          appointment_reminders: formData.communicationPreferences.appointmentReminders !== undefined
+            ? formData.communicationPreferences.appointmentReminders : true,
+          health_tips: formData.communicationPreferences.healthTips !== undefined
+            ? formData.communicationPreferences.healthTips : false
         }
       };
 
+      console.log('[OnboardingFlow] Prepared profile data:', profileData);
+
       const profile = await createPatientProfile(token, profileData);
+      console.log('[OnboardingFlow] Profile created successfully:', profile);
       onComplete(profile);
     } catch (error) {
-      console.error('Error creating profile:', error);
-      alert('Error creating your profile. Please try again.');
+      console.error('[OnboardingFlow] Error creating profile:', error);
+      console.error('[OnboardingFlow] Error details:', error.response?.data || error.message);
+
+      const errorMessage = error.response?.data?.error || error.message || 'Unknown error occurred';
+      alert(`Error creating your profile: ${errorMessage}. Please try again.`);
     }
   };
 
@@ -205,19 +245,41 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onComplete }) => {
 
             <div className="form-group">
               <label>Known Allergies (Optional)</label>
-              <input 
+              <input
                 type="text"
-                placeholder="Penicillin, Shellfish, etc. (comma separated)"
-                onChange={(e) => handleInputChange('allergies', e.target.value.split(',').map(s => s.trim()).filter(s => s))}
+                value={formData.allergiesText}
+                placeholder="Penicillin, Shellfish, etc. (comma separated) - Leave empty if none"
+                onChange={(e) => {
+                  const value = e.target.value;
+                  handleInputChange('allergiesText', value);
+
+                  const trimmedValue = value.trim();
+                  if (trimmedValue) {
+                    handleInputChange('allergies', trimmedValue.split(',').map(s => s.trim()).filter(s => s));
+                  } else {
+                    handleInputChange('allergies', []);
+                  }
+                }}
               />
             </div>
 
             <div className="form-group">
               <label>Current Medications (Optional)</label>
-              <input 
+              <input
                 type="text"
-                placeholder="Lisinopril, Advil, etc. (comma separated)"
-                onChange={(e) => handleInputChange('medications', e.target.value.split(',').map(s => s.trim()).filter(s => s))}
+                value={formData.medicationsText}
+                placeholder="Lisinopril, Advil, etc. (comma separated) - Leave empty if none"
+                onChange={(e) => {
+                  const value = e.target.value;
+                  handleInputChange('medicationsText', value);
+
+                  const trimmedValue = value.trim();
+                  if (trimmedValue) {
+                    handleInputChange('medications', trimmedValue.split(',').map(s => s.trim()).filter(s => s));
+                  } else {
+                    handleInputChange('medications', []);
+                  }
+                }}
               />
             </div>
           </div>
