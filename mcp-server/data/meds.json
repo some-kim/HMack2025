@@ -1,0 +1,6 @@
+[
+  { "name": "PainAway",   "allergens": [] },
+  { "name": "ReliefPlus", "allergens": [] },
+  { "name": "SootheCap",  "allergens": ["peanut oil"] },
+  { "name": "CalmGel",    "allergens": [] }
+]
