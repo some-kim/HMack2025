@@ -75,3 +75,28 @@ def get_thread_context(agent_email, thread_id):
         "last_message_id": thread.last_message_id,
         "context_messages": messages
     }
+
+def get_all_threads(agent_email):
+    all_threads = []
+
+    threads = client.inboxes.threads.list(inbox_id=agent_email)
+    for thread in threads.threads:
+        thread_full = client.inboxes.threads.get(inbox_id=agent_email, thread_id=thread.thread_id)
+        thread_data = {
+            "thread_id": thread_full.thread_id,
+            "subject": thread_full.subject,
+            "messages": [
+                {
+                    "from": msg.from_,
+                    "to": msg.to,
+                    "text": msg.text,
+                    "timestamp": msg.timestamp,
+                    "message_id": msg.message_id,
+                }
+                for msg in thread_full.messages
+            ]
+        }
+
+        all_threads.append(thread_data)
+
+    return all_threads

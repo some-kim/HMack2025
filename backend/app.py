@@ -1,6 +1,6 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-from agentmail_tool import create_inbox, send_new_message, reply_message, get_message, get_thread_context
+from agentmail_tool import create_inbox, send_new_message, reply_message, get_message, get_thread_context, get_all_threads
 
 app = Flask(__name__)
 CORS(app)
@@ -84,5 +84,19 @@ def get_thread_context_route():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/get-all-threads', methods=['POST'])
+def get_all_threads_route():
+    data = request.get_json()
+    agent_email = data.get("agent_email")
+
+    if not agent_email:
+        return jsonify({"error": "Missing agent_email"}), 400
+
+    try:
+        threads_data = get_all_threads(agent_email)
+        return jsonify(threads_data), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
 if __name__ == "__main__":
     app.run(debug=True)
