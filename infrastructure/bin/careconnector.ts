@@ -10,9 +10,9 @@ new CareConnectorStack(app, 'CareConnectorStack', {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: process.env.CDK_DEFAULT_REGION || 'us-east-2',
   },
-  description: 'CareFlow Healthcare Platform Infrastructure',
+  description: 'CareConnector Healthcare Platform Infrastructure',
   tags: {
-    Project: 'CareFlow',
+    Project: 'CareConnector',
     Environment: 'Development',
     Team: 'Hackathon',
   },

@@ -23,7 +23,7 @@ const Header: React.FC<HeaderProps> = ({ user }) => {
       <div className="header-content">
         <div className="logo-section">
           <div className="logo-icon">🏥</div>
-          <h1>CareFlow</h1>
+          <h1>CareConnector</h1>
         </div>
 
         <nav className="navigation">

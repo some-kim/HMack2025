@@ -1,0 +1,21 @@
+{
+  "version": "48.0.0",
+  "files": {
+    "10e718f42fb10b7472de8b5072cedf5408b5a11da0e39868aaf8bba119e018a5": {
+      "displayName": "CareConnectorStack Template",
+      "source": {
+        "path": "CareConnectorStack.template.json",
+        "packaging": "file"
+      },
+      "destinations": {
+        "520692692308-us-east-1-6eca05b6": {
+          "bucketName": "cdk-hnb659fds-assets-520692692308-us-east-1",
+          "objectKey": "10e718f42fb10b7472de8b5072cedf5408b5a11da0e39868aaf8bba119e018a5.json",
+          "region": "us-east-1",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::520692692308:role/cdk-hnb659fds-file-publishing-role-520692692308-us-east-1"
+        }
+      }
+    }
+  },
+  "dockerImages": {}
+}

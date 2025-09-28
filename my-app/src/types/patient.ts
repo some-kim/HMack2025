@@ -1,5 +1,6 @@
 export interface PatientProfile {
   user_id: string;
+  agent_email?: string;  // GSI field for querying patients by agent
   personal_info: {
     date_of_birth: string;
     gender: string;

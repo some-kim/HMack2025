@@ -75,7 +75,7 @@ const DashboardContent: React.FC<DashboardContentProps> = ({ patientProfile }) =
           },
           {
             id: '2',
-            from: 'CareFlow System',
+            from: 'CareConnector System',
             subject: 'Appointment Reminder',
             preview: 'This is a reminder for your upcoming appointment on October 2nd...',
             timestamp: '2025-09-26T09:00:00Z',

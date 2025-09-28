@@ -12,6 +12,7 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onComplete }) => {
   const { getAccessTokenSilently } = useAuth0();
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState({
+    agentEmail: '',  // New field for agent assignment
     dateOfBirth: '',
     gender: '',
     phone: '',
@@ -49,7 +50,38 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onComplete }) => {
   const handleSubmit = async () => {
     try {
       const token = await getAccessTokenSilently();
-      const profile = await createPatientProfile(token, formData);
+
+      // Map frontend form data to backend expected structure
+      const profileData = {
+        agent_email: formData.agentEmail || '',
+        personal_info: {
+          date_of_birth: formData.dateOfBirth,
+          gender: formData.gender,
+          phone: formData.phone,
+          address: formData.address,
+          emergency_contact: {
+            name: formData.emergencyContact.name,
+            phone: formData.emergencyContact.phone,
+            relationship: formData.emergencyContact.relationship
+          }
+        },
+        medical_info: {
+          allergies: formData.allergies,
+          medications: formData.medications,
+          conditions: formData.medicalConditions,
+          insurance: {
+            provider: formData.insurance.provider,
+            policy_number: formData.insurance.policyNumber
+          }
+        },
+        preferences: {
+          communication_method: formData.communicationPreferences.method,
+          appointment_reminders: formData.communicationPreferences.appointmentReminders,
+          health_tips: formData.communicationPreferences.healthTips
+        }
+      };
+
+      const profile = await createPatientProfile(token, profileData);
       onComplete(profile);
     } catch (error) {
       console.error('Error creating profile:', error);
@@ -195,12 +227,23 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onComplete }) => {
         return (
           <div className="onboarding-step">
             <h2>Communication Preferences</h2>
-            
+
+            <div className="form-group">
+              <label>Assigned Care Agent Email (Optional)</label>
+              <input
+                type="email"
+                value={formData.agentEmail}
+                onChange={(e) => handleInputChange('agentEmail', e.target.value)}
+                placeholder="agent@healthcare.com"
+              />
+              <small>If you have a specific care agent, enter their email address here</small>
+            </div>
+
             <div className="form-group">
               <label>How would you like to receive updates?</label>
               <div className="radio-group">
                 <label className="radio-option">
-                  <input 
+                  <input
                     type="radio"
                     value="email"
                     checked={formData.communicationPreferences.method === 'email'}
@@ -209,7 +252,7 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onComplete }) => {
                   Email only
                 </label>
                 <label className="radio-option">
-                  <input 
+                  <input
                     type="radio"
                     value="sms"
                     checked={formData.communicationPreferences.method === 'sms'}
@@ -218,7 +261,7 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onComplete }) => {
                   SMS only
                 </label>
                 <label className="radio-option">
-                  <input 
+                  <input
                     type="radio"
                     value="both"
                     checked={formData.communicationPreferences.method === 'both'}
@@ -231,7 +274,7 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onComplete }) => {
 
             <div className="checkbox-group">
               <label className="checkbox-option">
-                <input 
+                <input
                   type="checkbox"
                   checked={formData.communicationPreferences.appointmentReminders}
                   onChange={(e) => handleNestedChange('communicationPreferences', 'appointmentReminders', e.target.checked)}
@@ -239,7 +282,7 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onComplete }) => {
                 Send appointment reminders
               </label>
               <label className="checkbox-option">
-                <input 
+                <input
                   type="checkbox"
                   checked={formData.communicationPreferences.healthTips}
                   onChange={(e) => handleNestedChange('communicationPreferences', 'healthTips', e.target.checked)}

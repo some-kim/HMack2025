@@ -6,7 +6,7 @@ const Loading: React.FC = () => {
     <div className="loading-container">
       <div className="loading-spinner">
         <div className="spinner"></div>
-        <p>Loading CareFlow...</p>
+        <p>Loading CareConnector...</p>
       </div>
     </div>
   );

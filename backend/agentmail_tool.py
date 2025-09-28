@@ -12,6 +12,12 @@ client = AgentMail(api_key=api_key)
 def create_inbox(first_Name, last_Name, user_ID):
     username = f'{first_Name}{last_Name}.CareConnector.{user_ID}'
     inbox = client.inboxes.create(username=username)
+    return {
+        "inbox_id": inbox.inbox_id,
+        "username": username,
+        "email": inbox.email,
+        "created_at": inbox.created_at
+    }
 
 def send_new_message(agent_email, recipient_email, subject, text):
     sent_message = client.inboxes.messages.send(

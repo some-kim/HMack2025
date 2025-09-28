@@ -5,12 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "start": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview"
   },
   "dependencies": {
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "@auth0/auth0-react": "^2.5.0",
+    "axios": "^1.6.0"
   },
   "devDependencies": {
     "@types/react": "^18.3.3",
