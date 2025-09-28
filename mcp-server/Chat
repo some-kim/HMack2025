@@ -1,0 +1,5 @@
+
+> mcp-server@1.0.0 start
+> ts-node src/http.ts # - API listening on http://localhost:8787
+
+Chat API listening on http://localhost:8787
