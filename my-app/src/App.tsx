@@ -1,3 +1,4 @@
+<<<<<<< Updated upstream
 import React from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import LoginPage from './components/LoginPage';
@@ -11,8 +12,13 @@ const App: React.FC = () => {
   if (isLoading) {
     return <Loading />;
   }
+=======
+import Chat from './components/chat';
+>>>>>>> Stashed changes
 
+export default function App() {
   return (
+<<<<<<< Updated upstream
     <div className="App">
       {isAuthenticated ? <Dashboard /> : <LoginPage />}
     </div>
@@ -20,3 +26,12 @@ const App: React.FC = () => {
 };
 
 export default App;
+=======
+    <main style={{ maxWidth: 900, margin: '0 auto', padding: 16 }}>
+      <h1>AgentMail + Gemini Demo</h1>
+      <p style={{ color: '#555' }}>Ask something like: “Suggest an OTC option for a headache.”</p>
+      <Chat />
+    </main>
+  );
+}
+>>>>>>> Stashed changes
