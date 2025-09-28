@@ -1,9 +1,13 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-from agentmail_tool import create_inbox, send_new_message, reply_message, get_message, get_thread_context, get_all_threads
+from agentmail_tool import create_inbox, send_new_message, reply_message, get_message, get_thread_context, get_all_threads, autoReply, webhookSetup
+import logging
 
 app = Flask(__name__)
 CORS(app)
+logging.basicConfig(level=logging.INFO)
+
+app.secret_key = "something"
 
 @app.route('/api/create-inbox', methods=['POST'])
 def create_inbox_route():
@@ -98,5 +102,30 @@ def get_all_threads_route():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
+
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    data = request.get_json()
+
+    if 'thread_id' not in data['message']:
+        logging.error('Missing required fields in the webhook payload')
+        return jsonify({'error': 'Missing required fields: thread_id'}), 400
+
+    message = data['message']
+    thread_id = message.get('thread_id')
+
+    if not thread_id:
+        logging.error(f"Invalid email or thread_id: {thread_id}")
+        return jsonify({'error': 'Missing valid agent_email or thread_id'}), 400
+
+    try:
+        autoReply(thread_id)
+        logging.info(f"Auto-reply triggered for thread_id: {thread_id}")
+        return jsonify({'status': 'success', 'message': 'Auto-reply triggered successfully'}), 200
+    except Exception as e:
+        logging.error(f"Error in autoReply: {e}")
+        return jsonify({'error': str(e)}), 500
+    
 if __name__ == "__main__":
-    app.run(debug=True)
+    webhookSetup()
+    app.run(debug=True, port=5002)
