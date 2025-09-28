@@ -1,17 +1,17 @@
-// lib/careflow-stack.ts
+// lib/careconnector-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
 
-export class CareFlowStack extends cdk.Stack {
+export class CareConnectorStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
     // DynamoDB Table for Patient Records
     const patientsTable = new dynamodb.Table(this, 'PatientsTable', {
-      tableName: 'careflow-patients',
+      tableName: 'careconnector-patients',
       partitionKey: {
         name: 'user_id',
         type: dynamodb.AttributeType.STRING,
@@ -46,7 +46,7 @@ export class CareFlowStack extends cdk.Stack {
 
     // DynamoDB Table for Appointments
     const appointmentsTable = new dynamodb.Table(this, 'AppointmentsTable', {
-      tableName: 'careflow-appointments',
+      tableName: 'careconnector-appointments',
       partitionKey: {
         name: 'appointment_id',
         type: dynamodb.AttributeType.STRING,
@@ -88,7 +88,7 @@ export class CareFlowStack extends cdk.Stack {
 
     // DynamoDB Table for Providers/Hospitals
     const providersTable = new dynamodb.Table(this, 'ProvidersTable', {
-      tableName: 'careflow-providers',
+      tableName: 'careconnector-providers',
       partitionKey: {
         name: 'provider_id',
         type: dynamodb.AttributeType.STRING,
@@ -118,7 +118,7 @@ export class CareFlowStack extends cdk.Stack {
 
     // DynamoDB Table for Messages/Communications
     const messagesTable = new dynamodb.Table(this, 'MessagesTable', {
-      tableName: 'careflow-messages',
+      tableName: 'careconnector-messages',
       partitionKey: {
         name: 'conversation_id',
         type: dynamodb.AttributeType.STRING,
@@ -148,10 +148,10 @@ export class CareFlowStack extends cdk.Stack {
     });
 
     // IAM Role for Flask Application
-    const flaskAppRole = new iam.Role(this, 'CareFlowAppRole', {
+    const flaskAppRole = new iam.Role(this, 'CareConnectorAppRole', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
-      description: 'IAM Role for CareFlow Flask Application',
-      roleName: 'CareFlowAppRole',
+      description: 'IAM Role for CareConnector Flask Application',
+      roleName: 'CareConnectorAppRole',
     });
 
     // IAM Policy for DynamoDB Access
@@ -183,27 +183,27 @@ export class CareFlowStack extends cdk.Stack {
 
     // Store configuration in Parameter Store for easy access
     new ssm.StringParameter(this, 'PatientsTableName', {
-      parameterName: '/careflow/dynamodb/patients-table-name',
+      parameterName: '/careconnector/dynamodb/patients-table-name',
       stringValue: patientsTable.tableName,
     });
 
     new ssm.StringParameter(this, 'AppointmentsTableName', {
-      parameterName: '/careflow/dynamodb/appointments-table-name',
+      parameterName: '/careconnector/dynamodb/appointments-table-name',
       stringValue: appointmentsTable.tableName,
     });
 
     new ssm.StringParameter(this, 'ProvidersTableName', {
-      parameterName: '/careflow/dynamodb/providers-table-name',
+      parameterName: '/careconnector/dynamodb/providers-table-name',
       stringValue: providersTable.tableName,
     });
 
     new ssm.StringParameter(this, 'MessagesTableName', {
-      parameterName: '/careflow/dynamodb/messages-table-name',
+      parameterName: '/careconnector/dynamodb/messages-table-name',
       stringValue: messagesTable.tableName,
     });
 
     new ssm.StringParameter(this, 'AppRoleArn', {
-      parameterName: '/careflow/iam/app-role-arn',
+      parameterName: '/careconnector/iam/app-role-arn',
       stringValue: flaskAppRole.roleArn,
     });
 
@@ -211,31 +211,31 @@ export class CareFlowStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'PatientsTableOutput', {
       value: patientsTable.tableName,
       description: 'DynamoDB Patients Table Name',
-      exportName: 'CareFlow-PatientsTable',
+      exportName: 'CareConnector-PatientsTable',
     });
 
     new cdk.CfnOutput(this, 'AppointmentsTableOutput', {
       value: appointmentsTable.tableName,
       description: 'DynamoDB Appointments Table Name',
-      exportName: 'CareFlow-AppointmentsTable',
+      exportName: 'CareConnector-AppointmentsTable',
     });
 
     new cdk.CfnOutput(this, 'ProvidersTableOutput', {
       value: providersTable.tableName,
       description: 'DynamoDB Providers Table Name',
-      exportName: 'CareFlow-ProvidersTable',
+      exportName: 'CareConnector-ProvidersTable',
     });
 
     new cdk.CfnOutput(this, 'MessagesTableOutput', {
       value: messagesTable.tableName,
       description: 'DynamoDB Messages Table Name',
-      exportName: 'CareFlow-MessagesTable',
+      exportName: 'CareConnector-MessagesTable',
     });
 
     new cdk.CfnOutput(this, 'AppRoleOutput', {
       value: flaskAppRole.roleArn,
-      description: 'IAM Role ARN for CareFlow Application',
-      exportName: 'CareFlow-AppRole',
+      description: 'IAM Role ARN for CareConnector Application',
+      exportName: 'CareConnector-AppRole',
     });
   }
 }
