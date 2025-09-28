@@ -4,13 +4,14 @@
   "private": true,
   "scripts": {
     "chat": "ts-node src/server.ts",
-    "start": "ts-node src/http.ts" 
+    "start": "ts-node src/http.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "cors": "^2.8.5",
     "dotenv": "^17.2.2",
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "node-fetch": "^3.3.2"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",

@@ -1,6 +1,5 @@
 [
-  { "name": "PainAway",   "allergens": [] },
-  { "name": "ReliefPlus", "allergens": [] },
-  { "name": "SootheCap",  "allergens": ["peanut oil"] },
-  { "name": "CalmGel",    "allergens": [] }
+  { "name": "AcetaMax", "category": "pain", "ingredients": ["acetaminophen"], "containsPeanut": false },
+  { "name": "IbuRelief", "category": "pain", "ingredients": ["ibuprofen"], "containsPeanut": false },
+  { "name": "NutriGel Caps", "category": "supplement", "ingredients": ["vitamin E (peanut oil)"], "containsPeanut": true }
 ]

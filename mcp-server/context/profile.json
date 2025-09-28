@@ -1,1 +1,7 @@
-{ "userId": "demo-1", "allergies": ["peanut"] }
+{
+  "userId": "profile",
+  "email": "somewkim@gmail.com",
+  "notes": "Patient prefers concise responses.",
+  "allergies": ["peanut"],
+  "preferredPharmacy": "Main Street Pharmacy"
+}
